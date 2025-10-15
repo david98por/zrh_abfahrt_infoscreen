@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Cache-Control" content="no-store, must-revalidate" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Abfahrten – Zürich Flughafen (Zug) | Zürich Flughafen, Bahnhof (Bus/Tram)</title>
+  <style>
+    :root {
+      --bg:#0b0d10; --panel:#0f1217; --fg:#e8edf2; --muted:#a3adbb;
+      --border:#1d232c; --badge:#1b222c; --accent:#e60000;
+      --ok:#6bdba7; --warn:#ffd166; --err:#ff6b6b;
+    }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    .wrap { max-width:1920px; margin:0 auto; padding:18px; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+    h1 { font-size:28px; margin:0; }
+    .updated { color:var(--muted); font-size:14px; }
+    .cols { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:16px; overflow:hidden; display:flex; flex-direction:column; }
+    .card header { padding:12px 16px; border-bottom:1px solid var(--border); }
+    .card h2 { font-size:22px; margin:0; }
+    .sub { color:var(--muted); font-size:13px; }
+    .rows { flex:1; }
+    .row { display:grid; grid-template-columns: 110px 150px 1fr 120px 120px; gap:12px; padding:12px 14px; border-bottom:1px solid var(--border); align-items:center; font-size:20px;}
+    .row.head { color:#c6d0db; text-transform:uppercase; font-size:13px; letter-spacing:.08em; position:sticky; top:0; background:var(--panel); z-index:2; }
+    .row:nth-child(even) { background:#0c0f14; }
+    .badge { display:inline-flex; align-items:center; justify-content:center; min-width:56px; padding:6px 12px; border-radius:999px; background:var(--badge); font-weight:700; }
+    .dest { font-weight:700; }
+    .platform { font-weight:700; text-align:center; }
+    .status { font-size:18px; color:var(--muted); }
+    .footer { color:var(--muted); font-size:12px; margin-top:10px; }
+    .hl { color:var(--accent); font-weight:700; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Abfahrten ab Zürich Flughafen</h1>
+      <div class="updated">Letzte Aktualisierung: <span id="updated">–</span></div>
+    </header>
+
+    <div class="cols">
+      <!-- LEFT: Trains from Zürich Flughafen -->
+      <section class="card" id="col-left">
+        <header>
+          <div>
+            <h2>Züge – <span class="hl">Zürich Flughafen</span></h2>
+            <div class="sub">Nur Kategorie: Zug (IC/IR/EC/S-Bahn etc.)</div>
+          </div>
+        </header>
+        <div class="row head"><div>Zeit</div><div>Linie</div><div>Ziel</div><div>Gleis</div><div>Status</div></div>
+        <div class="rows" id="rows-left"></div>
+      </section>
+
+      <!-- RIGHT: Bus/Tram from Zürich Flughafen, Bahnhof -->
+      <section class="card" id="col-right">
+        <header>
+          <div>
+            <h2>Bus/Tram – <span class="hl">Zürich Flughafen, Bahnhof</span></h2>
+            <div class="sub">Nur Kategorien: Bus &amp; Tram</div>
+          </div>
+        </header>
+        <div class="row head"><div>Zeit</div><div>Linie</div><div>Ziel</div><div>Stop</div><div>Status</div></div>
+        <div class="rows" id="rows-right"></div>
+      </section>
+    </div>
+
+    <div class="footer">Quelle: transport.opendata.ch (GTFS-RT Schweiz) • Auto-Refresh 30 s • Darstellung: Echtzeit (Prognose) falls vorhanden, sonst Fahrplan.</div>
+  </div>
+
+<script>
+(function(){
+  const REFRESH_SEC = 30;
+  const LEFT_STATION  = "Zürich Flughafen";            // trains
+  const RIGHT_STATION = "Zürich Flughafen, Bahnhof";   // bus+tram
+  const LEFT_LIMIT  = 20;
+  const RIGHT_LIMIT = 20;
+
+  const rowsLeft  = document.getElementById('rows-left');
+  const rowsRight = document.getElementById('rows-right');
+  const updated   = document.getElementById('updated');
+
+  function fmtTime(iso){
+    try{
+      const d = new Date(iso);
+      return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    } catch(e){ return '–'; }
+  }
+
+  function clear(el){ while(el.firstChild) el.removeChild(el.firstChild); }
+
+  async function fetchBoard(station, modes, limit){
+    const url = new URL('https://transport.opendata.ch/v1/stationboard');
+    url.searchParams.set('station', station);
+    url.searchParams.set('limit', String(limit));
+    for (const m of modes) url.searchParams.append('transportations[]', m);
+    const res = await fetch(url.href, {cache:'no-store'});
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    return (data && data.stationboard) || [];
+  }
+
+  function renderList(list, targetEl, showPlatform, fixedStopLabel){
+    clear(targetEl);
+    if (!list.length){
+      const r=document.createElement('div');
+      r.className='row';
+      r.innerHTML='<div>–</div><div>–</div><div class="status">Keine Abfahrten gefunden</div><div>–</div><div>–</div>';
+      targetEl.appendChild(r);
+      return;
+    }
+    for (const it of list){
+      const r = document.createElement('div');
+      r.className = 'row';
+
+      const when = it.stop && (it.stop.prognosis && it.stop.prognosis.departure || it.stop.departure);
+      const t = fmtTime(when || it.stop?.departure || it.stop?.arrival || it.when);
+      const cat = (it.category || '').trim();
+      const number = (it.number || '').trim();
+      const line = (cat && number) ? (cat + ' ' + number) : (it.name || '–');
+      const to = (it.to || it.toStation?.name || '–');
+      const plat = it.stop && (it.stop.platform || it.stop.prognosis?.platform) || (fixedStopLabel || '–');
+      const delay = it.stop && it.stop.delay || 0;
+      const status = (delay && delay>0) ? ('+'+delay + ' min') : 'pünktlich';
+
+      const c0 = document.createElement('div'); c0.textContent = t;
+      const c1 = document.createElement('div'); const b = document.createElement('span'); b.className='badge'; b.textContent = line; c1.appendChild(b);
+      const c2 = document.createElement('div'); c2.className='dest'; c2.textContent = to;
+      const c3 = document.createElement('div'); c3.className='platform'; c3.textContent = showPlatform ? plat : (fixedStopLabel || '–');
+      const c4 = document.createElement('div'); c4.className='status'; c4.textContent = status;
+
+      r.appendChild(c0); r.appendChild(c1); r.appendChild(c2); r.appendChild(c3); r.appendChild(c4);
+      targetEl.appendChild(r);
+    }
+  }
+
+  async function load(){
+    try{
+      const [left, right] = await Promise.all([
+        fetchBoard(LEFT_STATION,  ["train"], LEFT_LIMIT),
+        fetchBoard(RIGHT_STATION, ["bus","tram"], RIGHT_LIMIT),
+      ]);
+      renderList(left, rowsLeft, true, null);
+      renderList(right, rowsRight, false, RIGHT_STATION);
+      updated.textContent = new Date().toLocaleTimeString();
+    }catch(e){
+      // Left error
+      clear(rowsLeft);
+      const el = document.createElement('div');
+      el.className='row'; el.innerHTML='<div>–</div><div>–</div><div class="status">Fehler beim Laden (Zug): '+(e.message||e)+'</div><div>–</div><div>–</div>';
+      rowsLeft.appendChild(el);
+      // Right error
+      clear(rowsRight);
+      const er = document.createElement('div');
+      er.className='row'; er.innerHTML='<div>–</div><div>–</div><div class="status">Fehler beim Laden (Bus/Tram): '+(e.message||e)+'</div><div>–</div><div>–</div>';
+      rowsRight.appendChild(er);
+    }
+  }
+
+  load();
+  setInterval(load, REFRESH_SEC * 1000);
+})();
+</script>
+</body>
+</html>
