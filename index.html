@@ -120,14 +120,14 @@
       const number = (it.number || '').trim();
       const line = (cat && number) ? (cat + ' ' + number) : (it.name || '–');
       const to = (it.to || it.toStation?.name || '–');
-      const plat = it.stop && (it.stop.platform || it.stop.prognosis?.platform) || (fixedStopLabel || '–');
+      const plat = it.stop && (it.stop.prognosis?.platform || it.stop.platform) || '–';
       const delay = it.stop && it.stop.delay || 0;
       const status = (delay && delay>0) ? ('+'+delay + ' min') : 'pünktlich';
 
       const c0 = document.createElement('div'); c0.textContent = t;
       const c1 = document.createElement('div'); const b = document.createElement('span'); b.className='badge'; b.textContent = line; c1.appendChild(b);
       const c2 = document.createElement('div'); c2.className='dest'; c2.textContent = to;
-      const c3 = document.createElement('div'); c3.className='platform'; c3.textContent = showPlatform ? plat : (fixedStopLabel || '–');
+      const c3 = document.createElement('div'); c3.textContent = plat;
       const c4 = document.createElement('div'); c4.className='status'; c4.textContent = status;
 
       r.appendChild(c0); r.appendChild(c1); r.appendChild(c2); r.appendChild(c3); r.appendChild(c4);
