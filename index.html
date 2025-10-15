@@ -113,7 +113,7 @@
     return s;
   }
 
-  function renderList(list, targetEl, showPlatform, fixedStopLabel){
+  function renderList(list, targetEl){
     clear(targetEl);
     if (!list.length){
       const r=document.createElement('div');
@@ -140,12 +140,8 @@
       const c1 = document.createElement('div'); const b = document.createElement('span'); b.className='badge'; b.textContent = line; c1.appendChild(b);
       const c2 = document.createElement('div'); c2.className='dest'; c2.textContent = to;
       const c3 = document.createElement('div'); c3.className='platform';
-      // links: Gleis als Text, rechts: Kante/Platform als Pill
-      if (showPlatform) {
-        c3.textContent = platVal;               // links: Gleis (Zug)
-      } else {
-        c3.appendChild(platformBadge(platVal)); // rechts: Kante (Bus/Tram) hübsch
-      }
+      // Gleis und Kante als Pill darstellen
+      c3.appendChild(platformBadge(platVal));
       const c4 = document.createElement('div');
       c4.className = 'status' + (status === 'pünktlich' ? '' : ' status--warn');
       c4.textContent = status;
@@ -161,8 +157,8 @@
         fetchBoard(LEFT_STATION,  ["train"], LEFT_LIMIT),
         fetchBoard(RIGHT_STATION, ["bus","tram"], RIGHT_LIMIT),
       ]);
-      renderList(left, rowsLeft, true, null);               // links: Gleis anzeigen (Text)
-      renderList(right, rowsRight, false, RIGHT_STATION);   // rechts: Kante als Pill
+      renderList(left, rowsLeft);
+      renderList(right, rowsRight);
       updated.textContent = new Date().toLocaleTimeString();
     }catch(e){
       clear(rowsLeft);
